@@ -26,6 +26,15 @@ display: flex;
 flex-direction: column;
 box-sizing: border-box;
 }
+#dots {
+position: fixed;
+inset: 0;
+width: 100vw;
+height: 100vh;
+z-index: 0;
+pointer-events: none;
+}
+header, main, footer { position: relative; z-index: 1; }
 header {
 padding: 2rem 2.5rem;
 }
@@ -62,7 +71,62 @@ margin: 2.4rem 0 1.8rem;
 font-family: "IBM Plex Mono", monospace;
 font-size: clamp(0.85rem, 1.6vw, 1rem);
 letter-spacing: 0.08em;
+margin: 0;
+}
+.signup {
+margin-top: 3.2rem;
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 0.9rem;
+}
+.signup-label {
+font-family: "IBM Plex Mono", monospace;
+font-size: 0.68rem;
+font-weight: 500;
+letter-spacing: 0.3em;
+text-transform: uppercase;
+color: var(--muted);
+margin: 0;
+}
+.signup form {
+display: flex;
+gap: 0;
+}
+.signup input {
+font-family: "IBM Plex Mono", monospace;
+font-size: 0.85rem;
+padding: 0.75rem 1rem;
+width: min(19rem, 60vw);
+border: 1px solid var(--ink);
+border-right: none;
+background: rgba(242, 239, 231, 0.85);
 color: var(--ink);
+outline: none;
+border-radius: 0;
+box-sizing: border-box;
+}
+.signup input::placeholder { color: var(--muted); }
+.signup button {
+font-family: "IBM Plex Mono", monospace;
+font-size: 0.75rem;
+font-weight: 500;
+letter-spacing: 0.18em;
+text-transform: uppercase;
+padding: 0.75rem 1.4rem;
+border: 1px solid var(--ink);
+background: var(--ink);
+color: var(--bg);
+cursor: pointer;
+border-radius: 0;
+}
+.signup button:hover { background: #3a382f; }
+.signup .note {
+font-family: "IBM Plex Mono", monospace;
+font-size: 0.72rem;
+letter-spacing: 0.08em;
+color: var(--accent);
+min-height: 1em;
 margin: 0;
 }
 footer {
@@ -79,6 +143,7 @@ footer .brand { color: var(--accent); }
 </style>
 </head>
 <body>
+<canvas id="dots"></canvas>
 <header>
 <span class="wordmark">syntropic structures</span>
 </header>
@@ -86,10 +151,120 @@ footer .brand { color: var(--accent); }
 <h1>syntropic structures</h1>
 <div class="rule"></div>
 <p class="subtitle">Real structures built with vibes.</p>
+<div class="signup">
+<p class="signup-label">Get updates</p>
+<form id="signup-form" novalidate>
+<input type="email" id="email" name="email" placeholder="your@email.com" autocomplete="email" required>
+<button type="submit">Notify me</button>
+</form>
+<p class="note" id="note"></p>
+</div>
 </main>
 <footer>
 <span class="brand">syntropic structures&#174;</span><br>
 2026
 </footer>
+<script>
+(function () {
+var FORM_ACTION = "https://docs.google.com/forms/d/e/1FAIpQLSdFatNW9e_VuXDl_deuCpbxSGVrybdpBNwQZfwUiaC-ngIPZg/formResponse";
+var ENTRY_ID = "entry.1030355267";
+var form = document.getElementById("signup-form");
+var note = document.getElementById("note");
+form.addEventListener("submit", function (e) {
+e.preventDefault();
+var email = document.getElementById("email").value.trim();
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+note.textContent = "that doesn't look like an email.";
+return;
+}
+var data = new FormData();
+data.append(ENTRY_ID, email);
+fetch(FORM_ACTION, { method: "POST", mode: "no-cors", body: data });
+note.textContent = "you're on the list.";
+form.reset();
+});
+})();
+
+(function () {
+var canvas = document.getElementById("dots");
+var ctx = canvas.getContext("2d");
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+var W, H, cols, rows;
+var SPACING = 9;
+
+function resize() {
+W = window.innerWidth;
+H = window.innerHeight;
+canvas.width = W * dpr;
+canvas.height = H * dpr;
+ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+cols = Math.ceil(W / SPACING) + 1;
+rows = Math.ceil(H / SPACING) + 1;
+}
+window.addEventListener("resize", resize);
+resize();
+
+// --- value noise with fbm ---
+function hash(x, y) {
+var s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
+return s - Math.floor(s);
+}
+function smooth(t) { return t * t * (3 - 2 * t); }
+function noise2(x, y) {
+var xi = Math.floor(x), yi = Math.floor(y);
+var xf = x - xi, yf = y - yi;
+var a = hash(xi, yi), b = hash(xi + 1, yi);
+var c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+var u = smooth(xf), v = smooth(yf);
+return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+function fbm(x, y) {
+var v = 0, amp = 0.5, freq = 1;
+for (var i = 0; i < 4; i++) {
+v += amp * noise2(x * freq, y * freq);
+amp *= 0.5;
+freq *= 2.1;
+}
+return v;
+}
+
+var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+var ink = [28, 27, 24];
+
+function draw(tms) {
+var t = tms * 0.000045;
+ctx.clearRect(0, 0, W, H);
+var cx = W * 0.5, cy = H * 0.46;
+var rx = Math.max(W * 0.30, 320), ry = Math.max(H * 0.34, 260);
+for (var j = 0; j < rows; j++) {
+var y = j * SPACING;
+var ny = y * 0.006;
+for (var i = 0; i < cols; i++) {
+var x = i * SPACING;
+var v = fbm(x * 0.006 + t * 3, ny + Math.sin(t * 1.7) * 0.35 + t * 0.6);
+if (v < 0.52) continue;
+// keep the centre clear for the text
+var dx = (x - cx) / rx, dy = (y - cy) / ry;
+var d2 = dx * dx + dy * dy;
+if (d2 < 1) continue;
+// keep the wordmark and footer readable
+if (x < 360 && y < 100) continue;
+if (y > H - 150 && Math.abs(x - cx) < 320) continue;
+var edge = Math.min((d2 - 1) * 2.2, 1);
+var strength = Math.min((v - 0.52) * 7, 1) * edge;
+if (strength <= 0.02) continue;
+// per-cell jitter for the dithered look
+var jit = hash(i * 7 + 3, j * 11 + 5);
+if (jit > 0.35 + strength * 0.6) continue;
+var size = 1 + strength * 2.2 * (0.6 + jit * 0.8);
+ctx.fillStyle = "rgba(" + ink[0] + "," + ink[1] + "," + ink[2] + "," + (0.25 + strength * 0.65).toFixed(3) + ")";
+ctx.fillRect(x, y, size, size);
+}
+}
+if (!reduced) requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+})();
+</script>
 </body>
 </html>
