@@ -305,18 +305,18 @@ resize();
 var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 var ink = [28, 27, 24];
 var timber = [96, 82, 56];
-var CYCLE = 34000;
+var CYCLE = 9000;
 
-/* 0..1 how present the truss is: hidden ~16s, ~4s fade in, ~8s hold, ~5s
+/* 0..1 how present the truss is: hidden 3s, 1.5s fade in, 3s hold, 1.5s
 fade out. #truss in the URL pins it visible for tuning. */
 function presence(ms) {
 if (reduced) return 0;
 if (location.hash === "#truss") return 1;
 var x = (ms % CYCLE) / CYCLE;
-if (x < 0.47 || x >= 0.97) return 0;
-if (x < 0.6) return smooth((x - 0.47) / 0.13);
-if (x < 0.83) return 1;
-return 1 - smooth((x - 0.83) / 0.14);
+if (x < 0.3333) return 0;
+if (x < 0.5) return smooth((x - 0.3333) / 0.1667);
+if (x < 0.8333) return 1;
+return 1 - smooth((x - 0.8333) / 0.1667);
 }
 
 function draw(tms) {
