@@ -218,7 +218,7 @@ form.reset();
 var canvas = document.getElementById("dots");
 var ctx = canvas.getContext("2d");
 var dpr = Math.min(window.devicePixelRatio || 1, 2);
-var W, H, cols, rows;
+var W, H, cols, rows, trussField;
 var SPACING = 9;
 
 function resize() {
@@ -229,9 +229,9 @@ canvas.height = H * dpr;
 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 cols = Math.ceil(W / SPACING) + 1;
 rows = Math.ceil(H / SPACING) + 1;
+buildTruss();
 }
 window.addEventListener("resize", resize);
-resize();
 
 function hash(x, y) {
 var s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
@@ -256,33 +256,109 @@ freq *= 2.1;
 return v;
 }
 
+function segDist(px, py, x1, y1, x2, y2) {
+var vx = x2 - x1, vy = y2 - y1;
+var wx = px - x1, wy = py - y1;
+var c1 = vx * wx + vy * wy;
+if (c1 <= 0) return Math.hypot(px - x1, py - y1);
+var c2 = vx * vx + vy * vy;
+if (c1 >= c2) return Math.hypot(px - x2, py - y2);
+var q = c1 / c2;
+return Math.hypot(px - (x1 + vx * q), py - (y1 + vy * q));
+}
+
+/* Precomputed per-grid-dot intensity of a parallel-chord truss (two chords,
+zigzag diagonal webbing) tilted slightly, centered below the headline. The
+draw loop blends dots toward it when it phases in. */
+function buildTruss() {
+var tcx = W * 0.5, tcy = H * 0.68;
+var ang = -0.075;
+var ca = Math.cos(ang), sa = Math.sin(ang);
+var depth = Math.min(Math.max(H * 0.17, 90), 150);
+var half = depth / 2;
+var panel = depth * 1.15;
+var reach = Math.sqrt(W * W + H * H) / 2 + panel;
+var thC = 8, thD = 6.5;
+trussField = new Float32Array(cols * rows);
+for (var j = 0; j < rows; j++) {
+var y = j * SPACING;
+for (var i = 0; i < cols; i++) {
+var x = i * SPACING;
+var ox = x - tcx, oy = y - tcy;
+var lx = ox * ca + oy * sa;
+var ly = oy * ca - ox * sa;
+if (Math.abs(ly) > half + thC || Math.abs(lx) > reach) continue;
+var best = (1 - Math.min(Math.abs(ly + half), Math.abs(ly - half)) / thC) * 1.5;
+var k0 = Math.floor(lx / panel);
+for (var k = k0 - 1; k <= k0 + 1; k++) {
+var ya = (k % 2 === 0) ? half : -half;
+var d = segDist(lx, ly, k * panel, ya, (k + 1) * panel, -ya);
+var di = (1 - d / thD) * 1.35;
+if (di > best) best = di;
+}
+if (best > 0) trussField[j * cols + i] = smooth(Math.min(best, 1));
+}
+}
+}
+resize();
+
 var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 var ink = [28, 27, 24];
+var timber = [96, 82, 56];
+var CYCLE = 34000;
+
+/* 0..1 how present the truss is: hidden ~16s, ~4s fade in, ~8s hold, ~5s
+fade out. #truss in the URL pins it visible for tuning. */
+function presence(ms) {
+if (reduced) return 0;
+if (location.hash === "#truss") return 1;
+var x = (ms % CYCLE) / CYCLE;
+if (x < 0.47 || x >= 0.97) return 0;
+if (x < 0.6) return smooth((x - 0.47) / 0.13);
+if (x < 0.83) return 1;
+return 1 - smooth((x - 0.83) / 0.14);
+}
 
 function draw(tms) {
 var t = tms * 0.000045;
 ctx.clearRect(0, 0, W, H);
 var cx = W * 0.5, cy = H * 0.46;
 var rx = Math.max(W * 0.30, 320), ry = Math.max(H * 0.34, 260);
+var p = presence(tms);
 for (var j = 0; j < rows; j++) {
 var y = j * SPACING;
 var ny = y * 0.006;
 for (var i = 0; i < cols; i++) {
 var x = i * SPACING;
-var v = fbm(x * 0.006 + t * 3, ny + Math.sin(t * 1.7) * 0.35 + t * 0.6);
-if (v < 0.52) continue;
+if (x < 360 && y < 100) continue;
+if (y > H - 150 && Math.abs(x - cx) < 320) continue;
 var dx = (x - cx) / rx, dy = (y - cy) / ry;
 var d2 = dx * dx + dy * dy;
 if (d2 < 1) continue;
-if (x < 360 && y < 100) continue;
-if (y > H - 150 && Math.abs(x - cx) < 320) continue;
+var f = p > 0 ? trussField[j * cols + i] : 0;
+var v = fbm(x * 0.006 + t * 3, ny + Math.sin(t * 1.7) * 0.35 + t * 0.6);
+var noiseS = v < 0.52 ? 0 : Math.min((v - 0.52) * 7, 1);
+var trussS = 0;
+if (f > 0.01) {
+/* Reveal keyed to local fog density: the truss condenses first where
+the drifting noise is thickest, so it morphs out of (and back into)
+the fog instead of crossfading uniformly. */
+var r = p * 1.55 - (0.6 - v) * 1.2;
+if (r > 0) trussS = f * smooth(r > 1 ? 1 : r);
+}
+if (noiseS <= 0 && trussS <= 0.03) continue;
 var edge = Math.min((d2 - 1) * 2.2, 1);
-var strength = Math.min((v - 0.52) * 7, 1) * edge;
+var strength = (trussS > noiseS ? trussS : noiseS) * edge;
 if (strength <= 0.02) continue;
 var jit = hash(i * 7 + 3, j * 11 + 5);
 if (jit > 0.35 + strength * 0.6) continue;
-var size = 1 + strength * 2.2 * (0.6 + jit * 0.8);
-ctx.fillStyle = "rgba(" + ink[0] + "," + ink[1] + "," + ink[2] + "," + (0.25 + strength * 0.65).toFixed(3) + ")";
+var w = trussS * edge;
+if (w > 1) w = 1;
+var size = 1 + strength * 2.2 * (0.6 + jit * 0.8) + w * 0.9;
+var cr = Math.round(ink[0] + (timber[0] - ink[0]) * w);
+var cg = Math.round(ink[1] + (timber[1] - ink[1]) * w);
+var cb = Math.round(ink[2] + (timber[2] - ink[2]) * w);
+ctx.fillStyle = "rgba(" + cr + "," + cg + "," + cb + "," + (0.25 + strength * 0.65).toFixed(3) + ")";
 ctx.fillRect(x, y, size, size);
 }
 }
