@@ -341,9 +341,10 @@ var noiseS = v < 0.52 ? 0 : Math.min((v - 0.52) * 7, 1);
 var trussS = 0;
 if (f > 0.01) {
 /* Reveal keyed to local fog density: the truss condenses first where
-the drifting noise is thickest, so it morphs out of (and back into)
-the fog instead of crossfading uniformly. */
-var r = p * 1.55 - (0.6 - v) * 1.2;
+the drifting noise is thickest, and even fully present it stays
+denser in thick fog and thinner in clear air, so it reads as part
+of the field rather than an overlay. */
+var r = p * (1.6 * v + 0.13);
 if (r > 0) trussS = f * smooth(r > 1 ? 1 : r);
 }
 if (noiseS <= 0 && trussS <= 0.03) continue;
@@ -352,9 +353,9 @@ var strength = (trussS > noiseS ? trussS : noiseS) * edge;
 if (strength <= 0.02) continue;
 var jit = hash(i * 7 + 3, j * 11 + 5);
 if (jit > 0.35 + strength * 0.6) continue;
-var w = trussS * edge;
+var w = trussS * edge * 0.65;
 if (w > 1) w = 1;
-var size = 1 + strength * 2.2 * (0.6 + jit * 0.8) + w * 0.9;
+var size = 1 + strength * 2.2 * (0.6 + jit * 0.8) + w * 0.5;
 var cr = Math.round(ink[0] + (timber[0] - ink[0]) * w);
 var cg = Math.round(ink[1] + (timber[1] - ink[1]) * w);
 var cb = Math.round(ink[2] + (timber[2] - ink[2]) * w);
