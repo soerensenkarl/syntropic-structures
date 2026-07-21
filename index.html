@@ -222,7 +222,7 @@ var consentEl = document.querySelector(".signup .consent");
 var dpr = Math.min(window.devicePixelRatio || 1, 2);
 var W, H, cols, rows, fields, rings;
 var SPACING = 9;
-var SHAPES = 2;
+var SHAPES = 3;
 
 function resize() {
 W = window.innerWidth;
@@ -266,8 +266,8 @@ the viewport. Per grid dot we store how strongly it sits on structure
 (fields) and a blurred ring just outside it (rings) used to thin the
 surrounding fog, as if cloud matter gets drawn into the shape. */
 
-var SHAPE_SRC = ["structure-1.png", "structure-2.png"];
-var shapeImgs = [null, null];
+var SHAPE_SRC = ["structure-1.png", "structure-2.png", "structure-3.png"];
+var shapeImgs = [null, null, null];
 for (var si = 0; si < SHAPES; si++) {
 var im = new Image();
 im.onload = buildFields;
@@ -338,8 +338,8 @@ var timber = [96, 82, 56];
 var CYCLE = 15000;
 
 /* #truss in the URL pins presence for tuning; #truss0 (tower) / #truss1
-(girders) also pins a specific shape. Returns null (no pin), -1 (pin,
-cycling shapes) or a shape index. */
+(girders) / #truss2 (gridshell) also pins a specific shape. Returns null
+(no pin), -1 (pin, cycling shapes) or a shape index. */
 function debugPin() {
 var m = /^#truss(\d)?$/.exec(location.hash);
 if (!m) return null;
