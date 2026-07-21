@@ -270,10 +270,21 @@ return Math.hypot(px - (x1 + vx * q), py - (y1 + vy * q));
 
 /* --- structure fields ---
 Three silhouettes the clouds periodically condense into: 0 a parallel-chord
-truss, 1 a leaning lattice tower (diagrid column), 2 overlapping bridge
-girders. Per grid dot we precompute, for each shape, how strongly it sits
-on a member (fields) and a ring just around members (rings) used to thin
-the surrounding fog, as if cloud matter gets drawn into the shape. */
+truss (geometric), 1 and 2 sampled straight from high-contrast masks of
+real photos (structure-1/2.png, white = structure), cover-cropped to the
+viewport. Per grid dot we store how strongly it sits on structure (fields)
+and a blurred ring just outside it (rings) used to thin the surrounding
+fog, as if cloud matter gets drawn into the shape. */
+
+var SHAPE_SRC = [null, "structure-1.png", "structure-2.png"];
+var shapeImgs = [null, null, null];
+for (var si = 0; si < SHAPES; si++) {
+if (!SHAPE_SRC[si]) continue;
+var im = new Image();
+im.onload = buildFields;
+im.src = SHAPE_SRC[si];
+shapeImgs[si] = im;
+}
 
 function trussAt(px, py, tcx, tcy, ang, half, panel, acc) {
 var ca = Math.cos(ang), sa = Math.sin(ang);
@@ -281,40 +292,72 @@ var ox = px - tcx, oy = py - tcy;
 var lx = ox * ca + oy * sa;
 var ly = oy * ca - ox * sa;
 if (Math.abs(ly) > half + 40) return;
-var dC = Math.min(Math.abs(ly + half), Math.abs(ly - half));
-if (dC < acc.d) acc.d = dC;
-var iC = (1 - dC / 8) * 1.5;
+var iC = (1 - Math.min(Math.abs(ly + half), Math.abs(ly - half)) / 8) * 1.5;
 if (iC > acc.i) acc.i = iC;
 var k0 = Math.floor(lx / panel);
 for (var k = k0 - 1; k <= k0 + 1; k++) {
 var ya = (k % 2 === 0) ? half : -half;
 var d = segDist(lx, ly, k * panel, ya, (k + 1) * panel, -ya);
-if (d < acc.d) acc.d = d;
 var di = (1 - d / 6.5) * 1.35;
 if (di > acc.i) acc.i = di;
 }
 }
 
-function towerAt(px, py, tcx, ang, halfW, grid, acc) {
-var ca = Math.cos(ang), sa = Math.sin(ang);
-var ox = px - tcx, oy = py - H * 0.5;
-var lx = ox * ca + oy * sa;
-var ly = oy * ca - ox * sa;
-var ax = Math.abs(lx);
-if (ax > halfW + 40) return;
-var dE = Math.abs(ax - halfW);
-if (dE < acc.d) acc.d = dE;
-var iE = (1 - dE / 8) * 1.5;
-if (iE > acc.i) acc.i = iE;
-if (ax <= halfW + 4) {
-var c1 = 0.809 * lx + 0.588 * ly;
-var c2 = 0.809 * lx - 0.588 * ly;
-var m1 = ((c1 % grid) + grid) % grid;
-var m2 = ((c2 % grid) + grid) % grid;
-var dD = Math.min(Math.min(m1, grid - m1), Math.min(m2, grid - m2));
-if (dD < acc.d) acc.d = dD;
-var iD = (1 - dD / 6.5) * 1.35;
-if (iD > acc.i) acc.i = iD;
+function buildTrussField(F) {
+var depth = Math.min(Math.max(H * 0.17, 90), 150);
+var half = depth / 2;
+var panel = depth * 1.15;
+for (var j = 0; j < rows; j++) {
+var y = j * SPACING;
+for (var i = 0; i < cols; i++) {
+var x = i * SPACING;
+var acc = { i: 0 };
+trussAt(x, y, W * 0.5, H * 0.68, -0.075, half, panel, acc);
+if (acc.i > 0) F[j * cols + i] = smooth(Math.min(acc.i, 1));
+}
+}
+}
+
+function sampleImageField(im, F) {
+var off = document.createElement("canvas");
+off.width = cols;
+off.height = rows;
+var octx = off.getContext("2d", { willReadFrequently: true });
+var arS = W / H, arI = im.width / im.height;
+var sx, sy, sw, sh;
+if (arI > arS) { sh = im.height; sw = sh * arS; sx = (im.width - sw) / 2; sy = 0; }
+else { sw = im.width; sh = sw / arS; sx = 0; sy = (im.height - sh) / 2; }
+octx.drawImage(im, sx, sy, sw, sh, 0, 0, cols, rows);
+var px;
+try { px = octx.getImageData(0, 0, cols, rows).data; } catch (e) { return; }
+for (var k = 0; k < cols * rows; k++) F[k] = px[k * 4] / 255;
+}
+
+function ringFrom(F, R) {
+var tmp = new Float32Array(cols * rows);
+for (var j = 0; j < rows; j++) {
+for (var i = 0; i < cols; i++) {
+var acc = 0, c = 0;
+for (var k = -2; k <= 2; k++) {
+var ii = i + k;
+if (ii >= 0 && ii < cols) { acc += F[j * cols + ii]; c++; }
+}
+tmp[j * cols + i] = acc / c;
+}
+}
+for (var j = 0; j < rows; j++) {
+for (var i = 0; i < cols; i++) {
+var acc = 0, c = 0;
+for (var k = -2; k <= 2; k++) {
+var jj = j + k;
+if (jj >= 0 && jj < rows) { acc += tmp[jj * cols + i]; c++; }
+}
+var f = F[j * cols + i];
+var r = (acc / c - f) * 1.6;
+if (r < 0) r = 0;
+if (r > 1) r = 1;
+R[j * cols + i] = r * (1 - f);
+}
 }
 }
 
@@ -325,33 +368,11 @@ for (var s = 0; s < SHAPES; s++) {
 fields.push(new Float32Array(cols * rows));
 rings.push(new Float32Array(cols * rows));
 }
-var depth = Math.min(Math.max(H * 0.17, 90), 150);
-var half = depth / 2;
-var panel = depth * 1.15;
-var halfW = Math.min(Math.max(W * 0.07, 55), 110);
-var grid = Math.min(Math.max(H * 0.085, 52), 80);
-for (var j = 0; j < rows; j++) {
-var y = j * SPACING;
-for (var i = 0; i < cols; i++) {
-var x = i * SPACING;
-var idx = j * cols + i;
-for (var s = 0; s < SHAPES; s++) {
-var acc = { i: 0, d: 1e9 };
-if (s === 0) {
-trussAt(x, y, W * 0.5, H * 0.68, -0.075, half, panel, acc);
-} else if (s === 1) {
-towerAt(x, y, W * 0.79, 0.14, halfW, grid, acc);
-} else {
-trussAt(x, y, W * 0.5, H * 0.26, 0.14, half * 0.75, panel * 0.75, acc);
-trussAt(x, y, W * 0.5, H * 0.72, -0.1, half, panel, acc);
-trussAt(x, y, W * 0.30, H * 0.5, 0.9, half * 0.6, panel * 0.6, acc);
+buildTrussField(fields[0]);
+for (var s = 1; s < SHAPES; s++) {
+if (shapeImgs[s] && shapeImgs[s].complete && shapeImgs[s].naturalWidth) sampleImageField(shapeImgs[s], fields[s]);
 }
-var f = acc.i > 0 ? smooth(Math.min(acc.i, 1)) : 0;
-fields[s][idx] = f;
-if (acc.d < 28) rings[s][idx] = smooth(1 - acc.d / 28) * (1 - f);
-}
-}
-}
+for (var s = 0; s < SHAPES; s++) ringFrom(fields[s], rings[s]);
 }
 resize();
 
