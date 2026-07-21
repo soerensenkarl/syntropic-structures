@@ -137,6 +137,7 @@ background: var(--ink);
 color: var(--bg);
 cursor: pointer;
 border-radius: 0;
+white-space: nowrap;
 }
 .signup button:hover { background: #3a382f; }
 .signup .note {
@@ -217,6 +218,7 @@ form.reset();
 (function () {
 var canvas = document.getElementById("dots");
 var ctx = canvas.getContext("2d");
+var consentEl = document.querySelector(".signup .consent");
 var dpr = Math.min(window.devicePixelRatio || 1, 2);
 var W, H, cols, rows, fields, rings;
 var SPACING = 9;
@@ -367,6 +369,17 @@ var rx = mobile ? W * 0.40 : Math.max(W * 0.30, 320);
 var ry = mobile ? H * 0.28 : Math.max(H * 0.34, 260);
 var fade = mobile ? 0.55 : 1;
 var footHalf = mobile ? Math.min(320, W * 0.38) : 320;
+/* On phones the consent paragraph sits below the ellipse core, so give
+it its own measured clearing: a snug squircle around its live rect
+with the same probabilistic dissolve at the fringe. */
+var cRect = mobile && consentEl ? consentEl.getBoundingClientRect() : null;
+var ccx, ccy, crx2, cry2;
+if (cRect) {
+ccx = cRect.left + cRect.width * 0.5;
+ccy = cRect.top + cRect.height * 0.5;
+crx2 = cRect.width * 0.5 * 1.18;
+cry2 = cRect.height * 0.5 * 1.3 + 6;
+}
 var dbg = debugPin();
 var p = presence(tms, dbg);
 var shape = (dbg !== null && dbg >= 0) ? dbg : Math.floor(tms / CYCLE) % SHAPES;
@@ -402,6 +415,15 @@ if (f2 < 1.25) {
 var sf = smooth(Math.min(Math.max((f2 - 0.35) / 0.9, 0), 1));
 if (sf <= 0 || hash(i * 19 + 11, j * 23 + 5) > sf) continue;
 edge *= 0.35 + 0.65 * sf;
+}
+if (cRect) {
+var cdx = (x - ccx) / crx2, cdy = (y - ccy) / cry2;
+var c4 = cdx * cdx * cdx * cdx + cdy * cdy * cdy * cdy;
+if (c4 < 1.8) {
+var sc = smooth(Math.min(Math.max((c4 - 1) / 0.8, 0), 1));
+if (sc <= 0 || hash(i * 29 + 3, j * 31 + 7) > sc) continue;
+edge *= 0.35 + 0.65 * sc;
+}
 }
 var f = 0, ring = 0;
 if (p > 0) {
