@@ -218,8 +218,9 @@ form.reset();
 var canvas = document.getElementById("dots");
 var ctx = canvas.getContext("2d");
 var dpr = Math.min(window.devicePixelRatio || 1, 2);
-var W, H, cols, rows, trussField;
+var W, H, cols, rows, fields, rings;
 var SPACING = 9;
+var SHAPES = 3;
 
 function resize() {
 W = window.innerWidth;
@@ -229,7 +230,7 @@ canvas.height = H * dpr;
 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 cols = Math.ceil(W / SPACING) + 1;
 rows = Math.ceil(H / SPACING) + 1;
-buildTruss();
+buildFields();
 }
 window.addEventListener("resize", resize);
 
@@ -267,36 +268,88 @@ var q = c1 / c2;
 return Math.hypot(px - (x1 + vx * q), py - (y1 + vy * q));
 }
 
-/* Precomputed per-grid-dot intensity of a parallel-chord truss (two chords,
-zigzag diagonal webbing) tilted slightly, centered below the headline. The
-draw loop blends dots toward it when it phases in. */
-function buildTruss() {
-var tcx = W * 0.5, tcy = H * 0.68;
-var ang = -0.075;
+/* --- structure fields ---
+Three silhouettes the clouds periodically condense into: 0 a parallel-chord
+truss, 1 a leaning lattice tower (diagrid column), 2 overlapping bridge
+girders. Per grid dot we precompute, for each shape, how strongly it sits
+on a member (fields) and a ring just around members (rings) used to thin
+the surrounding fog, as if cloud matter gets drawn into the shape. */
+
+function trussAt(px, py, tcx, tcy, ang, half, panel, acc) {
 var ca = Math.cos(ang), sa = Math.sin(ang);
-var depth = Math.min(Math.max(H * 0.17, 90), 150);
-var half = depth / 2;
-var panel = depth * 1.15;
-var reach = Math.sqrt(W * W + H * H) / 2 + panel;
-var thC = 8, thD = 6.5;
-trussField = new Float32Array(cols * rows);
-for (var j = 0; j < rows; j++) {
-var y = j * SPACING;
-for (var i = 0; i < cols; i++) {
-var x = i * SPACING;
-var ox = x - tcx, oy = y - tcy;
+var ox = px - tcx, oy = py - tcy;
 var lx = ox * ca + oy * sa;
 var ly = oy * ca - ox * sa;
-if (Math.abs(ly) > half + thC || Math.abs(lx) > reach) continue;
-var best = (1 - Math.min(Math.abs(ly + half), Math.abs(ly - half)) / thC) * 1.5;
+if (Math.abs(ly) > half + 40) return;
+var dC = Math.min(Math.abs(ly + half), Math.abs(ly - half));
+if (dC < acc.d) acc.d = dC;
+var iC = (1 - dC / 8) * 1.5;
+if (iC > acc.i) acc.i = iC;
 var k0 = Math.floor(lx / panel);
 for (var k = k0 - 1; k <= k0 + 1; k++) {
 var ya = (k % 2 === 0) ? half : -half;
 var d = segDist(lx, ly, k * panel, ya, (k + 1) * panel, -ya);
-var di = (1 - d / thD) * 1.35;
-if (di > best) best = di;
+if (d < acc.d) acc.d = d;
+var di = (1 - d / 6.5) * 1.35;
+if (di > acc.i) acc.i = di;
 }
-if (best > 0) trussField[j * cols + i] = smooth(Math.min(best, 1));
+}
+
+function towerAt(px, py, tcx, ang, halfW, grid, acc) {
+var ca = Math.cos(ang), sa = Math.sin(ang);
+var ox = px - tcx, oy = py - H * 0.5;
+var lx = ox * ca + oy * sa;
+var ly = oy * ca - ox * sa;
+var ax = Math.abs(lx);
+if (ax > halfW + 40) return;
+var dE = Math.abs(ax - halfW);
+if (dE < acc.d) acc.d = dE;
+var iE = (1 - dE / 8) * 1.5;
+if (iE > acc.i) acc.i = iE;
+if (ax <= halfW + 4) {
+var c1 = 0.809 * lx + 0.588 * ly;
+var c2 = 0.809 * lx - 0.588 * ly;
+var m1 = ((c1 % grid) + grid) % grid;
+var m2 = ((c2 % grid) + grid) % grid;
+var dD = Math.min(Math.min(m1, grid - m1), Math.min(m2, grid - m2));
+if (dD < acc.d) acc.d = dD;
+var iD = (1 - dD / 6.5) * 1.35;
+if (iD > acc.i) acc.i = iD;
+}
+}
+
+function buildFields() {
+fields = [];
+rings = [];
+for (var s = 0; s < SHAPES; s++) {
+fields.push(new Float32Array(cols * rows));
+rings.push(new Float32Array(cols * rows));
+}
+var depth = Math.min(Math.max(H * 0.17, 90), 150);
+var half = depth / 2;
+var panel = depth * 1.15;
+var halfW = Math.min(Math.max(W * 0.07, 55), 110);
+var grid = Math.min(Math.max(H * 0.085, 52), 80);
+for (var j = 0; j < rows; j++) {
+var y = j * SPACING;
+for (var i = 0; i < cols; i++) {
+var x = i * SPACING;
+var idx = j * cols + i;
+for (var s = 0; s < SHAPES; s++) {
+var acc = { i: 0, d: 1e9 };
+if (s === 0) {
+trussAt(x, y, W * 0.5, H * 0.68, -0.075, half, panel, acc);
+} else if (s === 1) {
+towerAt(x, y, W * 0.79, 0.14, halfW, grid, acc);
+} else {
+trussAt(x, y, W * 0.5, H * 0.26, 0.14, half * 0.75, panel * 0.75, acc);
+trussAt(x, y, W * 0.5, H * 0.72, -0.1, half, panel, acc);
+trussAt(x, y, W * 0.30, H * 0.5, 0.9, half * 0.6, panel * 0.6, acc);
+}
+var f = acc.i > 0 ? smooth(Math.min(acc.i, 1)) : 0;
+fields[s][idx] = f;
+if (acc.d < 28) rings[s][idx] = smooth(1 - acc.d / 28) * (1 - f);
+}
 }
 }
 }
@@ -307,11 +360,20 @@ var ink = [28, 27, 24];
 var timber = [96, 82, 56];
 var CYCLE = 9000;
 
-/* 0..1 how present the truss is: hidden 3s, 1.5s fade in, 3s hold, 1.5s
-fade out. #truss in the URL pins it visible for tuning. */
-function presence(ms) {
+/* #truss in the URL pins presence for tuning; #truss0/1/2 also pins a
+specific shape. Returns null (no pin), -1 (pin, cycling shapes) or a
+shape index. */
+function debugPin() {
+var m = /^#truss(\d)?$/.exec(location.hash);
+if (!m) return null;
+return m[1] ? +m[1] % SHAPES : -1;
+}
+
+/* 0..1 how present the structure is: hidden 3s, 1.5s fade in, 3s hold,
+1.5s fade out. */
+function presence(ms, dbg) {
 if (reduced) return 0;
-if (location.hash === "#truss") return 1;
+if (dbg !== null) return 1;
 var x = (ms % CYCLE) / CYCLE;
 if (x < 0.3333) return 0;
 if (x < 0.5) return smooth((x - 0.3333) / 0.1667);
@@ -324,7 +386,10 @@ var t = tms * 0.000045;
 ctx.clearRect(0, 0, W, H);
 var cx = W * 0.5, cy = H * 0.46;
 var rx = Math.max(W * 0.30, 320), ry = Math.max(H * 0.34, 260);
-var p = presence(tms);
+var dbg = debugPin();
+var p = presence(tms, dbg);
+var shape = (dbg !== null && dbg >= 0) ? dbg : Math.floor(tms / CYCLE) % SHAPES;
+var F = fields[shape], R = rings[shape];
 for (var j = 0; j < rows; j++) {
 var y = j * SPACING;
 var ny = y * 0.006;
@@ -335,27 +400,25 @@ if (y > H - 150 && Math.abs(x - cx) < 320) continue;
 var dx = (x - cx) / rx, dy = (y - cy) / ry;
 var d2 = dx * dx + dy * dy;
 if (d2 < 1) continue;
-var f = p > 0 ? trussField[j * cols + i] : 0;
-var v = fbm(x * 0.006 + t * 3, ny + Math.sin(t * 1.7) * 0.35 + t * 0.6);
-var noiseS = v < 0.52 ? 0 : Math.min((v - 0.52) * 7, 1);
-var trussS = 0;
-if (f > 0.01) {
-/* Reveal keyed to local fog density: the truss condenses first where
-the drifting noise is thickest, and even fully present it stays
-denser in thick fog and thinner in clear air, so it reads as part
-of the field rather than an overlay. */
-var r = p * (1.6 * v + 0.13);
-if (r > 0) trussS = f * smooth(r > 1 ? 1 : r);
+var f = 0, ring = 0;
+if (p > 0) {
+var idx = j * cols + i;
+f = F[idx];
+ring = R[idx];
 }
-if (noiseS <= 0 && trussS <= 0.03) continue;
-var edge = Math.min((d2 - 1) * 2.2, 1);
-var strength = (trussS > noiseS ? trussS : noiseS) * edge;
+var v = fbm(x * 0.006 + t * 3, ny + Math.sin(t * 1.7) * 0.35 + t * 0.6);
+/* The structure never gets dots of its own: it bends the cloud field.
+Members amplify the local fog value and the ring around them drains
+it, so passing clouds condense into the shape and, on release,
+continue drifting as themselves. */
+var vEff = v + p * (f * 0.4 - ring * 0.1);
+if (vEff < 0.52) continue;
+var strength = Math.min((vEff - 0.52) * 7, 1) * Math.min((d2 - 1) * 2.2, 1);
 if (strength <= 0.02) continue;
 var jit = hash(i * 7 + 3, j * 11 + 5);
 if (jit > 0.35 + strength * 0.6) continue;
-var w = trussS * edge * 0.65;
-if (w > 1) w = 1;
-var size = 1 + strength * 2.2 * (0.6 + jit * 0.8) + w * 0.5;
+var w = p * f * 0.55;
+var size = 1 + strength * 2.2 * (0.6 + jit * 0.8) + w * 0.4;
 var cr = Math.round(ink[0] + (timber[0] - ink[0]) * w);
 var cg = Math.round(ink[1] + (timber[1] - ink[1]) * w);
 var cb = Math.round(ink[2] + (timber[2] - ink[2]) * w);
