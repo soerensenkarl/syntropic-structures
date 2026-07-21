@@ -220,7 +220,7 @@ var ctx = canvas.getContext("2d");
 var dpr = Math.min(window.devicePixelRatio || 1, 2);
 var W, H, cols, rows, fields, rings;
 var SPACING = 9;
-var SHAPES = 3;
+var SHAPES = 2;
 
 function resize() {
 W = window.innerWidth;
@@ -257,65 +257,20 @@ freq *= 2.1;
 return v;
 }
 
-function segDist(px, py, x1, y1, x2, y2) {
-var vx = x2 - x1, vy = y2 - y1;
-var wx = px - x1, wy = py - y1;
-var c1 = vx * wx + vy * wy;
-if (c1 <= 0) return Math.hypot(px - x1, py - y1);
-var c2 = vx * vx + vy * vy;
-if (c1 >= c2) return Math.hypot(px - x2, py - y2);
-var q = c1 / c2;
-return Math.hypot(px - (x1 + vx * q), py - (y1 + vy * q));
-}
-
 /* --- structure fields ---
-Three silhouettes the clouds periodically condense into: 0 a parallel-chord
-truss (geometric), 1 and 2 sampled straight from high-contrast masks of
-real photos (structure-1/2.png, white = structure), cover-cropped to the
-viewport. Per grid dot we store how strongly it sits on structure (fields)
-and a blurred ring just outside it (rings) used to thin the surrounding
-fog, as if cloud matter gets drawn into the shape. */
+Silhouettes the clouds periodically condense into, sampled straight from
+high-contrast masks of real photos (white = structure), cover-cropped to
+the viewport. Per grid dot we store how strongly it sits on structure
+(fields) and a blurred ring just outside it (rings) used to thin the
+surrounding fog, as if cloud matter gets drawn into the shape. */
 
-var SHAPE_SRC = [null, "structure-1.png", "structure-2.png"];
-var shapeImgs = [null, null, null];
+var SHAPE_SRC = ["structure-1.png", "structure-2.png"];
+var shapeImgs = [null, null];
 for (var si = 0; si < SHAPES; si++) {
-if (!SHAPE_SRC[si]) continue;
 var im = new Image();
 im.onload = buildFields;
 im.src = SHAPE_SRC[si];
 shapeImgs[si] = im;
-}
-
-function trussAt(px, py, tcx, tcy, ang, half, panel, acc) {
-var ca = Math.cos(ang), sa = Math.sin(ang);
-var ox = px - tcx, oy = py - tcy;
-var lx = ox * ca + oy * sa;
-var ly = oy * ca - ox * sa;
-if (Math.abs(ly) > half + 40) return;
-var iC = (1 - Math.min(Math.abs(ly + half), Math.abs(ly - half)) / 8) * 1.5;
-if (iC > acc.i) acc.i = iC;
-var k0 = Math.floor(lx / panel);
-for (var k = k0 - 1; k <= k0 + 1; k++) {
-var ya = (k % 2 === 0) ? half : -half;
-var d = segDist(lx, ly, k * panel, ya, (k + 1) * panel, -ya);
-var di = (1 - d / 6.5) * 1.35;
-if (di > acc.i) acc.i = di;
-}
-}
-
-function buildTrussField(F) {
-var depth = Math.min(Math.max(H * 0.17, 90), 150);
-var half = depth / 2;
-var panel = depth * 1.15;
-for (var j = 0; j < rows; j++) {
-var y = j * SPACING;
-for (var i = 0; i < cols; i++) {
-var x = i * SPACING;
-var acc = { i: 0 };
-trussAt(x, y, W * 0.5, H * 0.68, -0.075, half, panel, acc);
-if (acc.i > 0) F[j * cols + i] = smooth(Math.min(acc.i, 1));
-}
-}
 }
 
 function sampleImageField(im, F) {
@@ -368,8 +323,7 @@ for (var s = 0; s < SHAPES; s++) {
 fields.push(new Float32Array(cols * rows));
 rings.push(new Float32Array(cols * rows));
 }
-buildTrussField(fields[0]);
-for (var s = 1; s < SHAPES; s++) {
+for (var s = 0; s < SHAPES; s++) {
 if (shapeImgs[s] && shapeImgs[s].complete && shapeImgs[s].naturalWidth) sampleImageField(shapeImgs[s], fields[s]);
 }
 for (var s = 0; s < SHAPES; s++) ringFrom(fields[s], rings[s]);
@@ -379,34 +333,40 @@ resize();
 var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 var ink = [28, 27, 24];
 var timber = [96, 82, 56];
-var CYCLE = 9000;
+var CYCLE = 15000;
 
-/* #truss in the URL pins presence for tuning; #truss0/1/2 also pins a
-specific shape. Returns null (no pin), -1 (pin, cycling shapes) or a
-shape index. */
+/* #truss in the URL pins presence for tuning; #truss0 (tower) / #truss1
+(girders) also pins a specific shape. Returns null (no pin), -1 (pin,
+cycling shapes) or a shape index. */
 function debugPin() {
 var m = /^#truss(\d)?$/.exec(location.hash);
 if (!m) return null;
 return m[1] ? +m[1] % SHAPES : -1;
 }
 
-/* 0..1 how present the structure is: hidden 3s, 1.5s fade in, 3s hold,
-1.5s fade out. */
+/* 0..1 presence of the structure: one continuous sine bump per cycle —
+no plateau, no ramp corners — so condensing and releasing move at the
+same unhurried pace as the cloud drift. */
 function presence(ms, dbg) {
 if (reduced) return 0;
 if (dbg !== null) return 1;
-var x = (ms % CYCLE) / CYCLE;
-if (x < 0.3333) return 0;
-if (x < 0.5) return smooth((x - 0.3333) / 0.1667);
-if (x < 0.8333) return 1;
-return 1 - smooth((x - 0.8333) / 0.1667);
+var s = Math.sin(Math.PI * ((ms % CYCLE) / CYCLE));
+return Math.pow(s, 2.6);
 }
 
 function draw(tms) {
 var t = tms * 0.000045;
 ctx.clearRect(0, 0, W, H);
+/* Mobile: the desktop mask radii would swallow a phone viewport, so use
+a snug ellipse around the text column, a gentler edge fade, and fainter
+dots overall — a quiet backdrop gathered close around the title. */
+var mobile = W < 640;
 var cx = W * 0.5, cy = H * 0.46;
-var rx = Math.max(W * 0.30, 320), ry = Math.max(H * 0.34, 260);
+var rx = mobile ? W * 0.46 : Math.max(W * 0.30, 320);
+var ry = mobile ? H * 0.33 : Math.max(H * 0.34, 260);
+var edgeK = mobile ? 1.5 : 2.2;
+var fade = mobile ? 0.55 : 1;
+var footHalf = mobile ? Math.min(320, W * 0.38) : 320;
 var dbg = debugPin();
 var p = presence(tms, dbg);
 var shape = (dbg !== null && dbg >= 0) ? dbg : Math.floor(tms / CYCLE) % SHAPES;
@@ -417,7 +377,7 @@ var ny = y * 0.006;
 for (var i = 0; i < cols; i++) {
 var x = i * SPACING;
 if (x < 360 && y < 100) continue;
-if (y > H - 150 && Math.abs(x - cx) < 320) continue;
+if (y > H - 150 && Math.abs(x - cx) < footHalf) continue;
 var dx = (x - cx) / rx, dy = (y - cy) / ry;
 var d2 = dx * dx + dy * dy;
 if (d2 < 1) continue;
@@ -434,7 +394,7 @@ it, so passing clouds condense into the shape and, on release,
 continue drifting as themselves. */
 var vEff = v + p * (f * 0.4 - ring * 0.1);
 if (vEff < 0.52) continue;
-var strength = Math.min((vEff - 0.52) * 7, 1) * Math.min((d2 - 1) * 2.2, 1);
+var strength = Math.min((vEff - 0.52) * 7, 1) * Math.min((d2 - 1) * edgeK, 1);
 if (strength <= 0.02) continue;
 var jit = hash(i * 7 + 3, j * 11 + 5);
 if (jit > 0.35 + strength * 0.6) continue;
@@ -443,7 +403,7 @@ var size = 1 + strength * 2.2 * (0.6 + jit * 0.8) + w * 0.4;
 var cr = Math.round(ink[0] + (timber[0] - ink[0]) * w);
 var cg = Math.round(ink[1] + (timber[1] - ink[1]) * w);
 var cb = Math.round(ink[2] + (timber[2] - ink[2]) * w);
-ctx.fillStyle = "rgba(" + cr + "," + cg + "," + cb + "," + (0.25 + strength * 0.65).toFixed(3) + ")";
+ctx.fillStyle = "rgba(" + cr + "," + cg + "," + cb + "," + ((0.25 + strength * 0.65) * fade).toFixed(3) + ")";
 ctx.fillRect(x, y, size, size);
 }
 }
