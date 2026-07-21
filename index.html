@@ -219,6 +219,7 @@ form.reset();
 var canvas = document.getElementById("dots");
 var ctx = canvas.getContext("2d");
 var consentEl = document.querySelector(".signup .consent");
+var wordmarkEl = document.querySelector(".wordmark");
 var dpr = Math.min(window.devicePixelRatio || 1, 2);
 var W, H, cols, rows, fields, rings;
 var SPACING = 9;
@@ -380,6 +381,16 @@ ccy = cRect.top + cRect.height * 0.5;
 crx2 = cRect.width * 0.5 * 1.18;
 cry2 = cRect.height * 0.5 * 1.3 + 6;
 }
+/* The header wordmark gets the same live edge as everything else (its
+old hard rectangle read as a stamped notch in the field). */
+var wRect = wordmarkEl ? wordmarkEl.getBoundingClientRect() : null;
+var wcx, wcy, wrx, wry;
+if (wRect) {
+wcx = wRect.left + wRect.width * 0.5;
+wcy = wRect.top + wRect.height * 0.5;
+wrx = wRect.width * 0.5 * 1.15 + 14;
+wry = wRect.height * 0.5 + 18;
+}
 var dbg = debugPin();
 var p = presence(tms, dbg);
 var shape = (dbg !== null && dbg >= 0) ? dbg : Math.floor(tms / CYCLE) % SHAPES;
@@ -389,7 +400,6 @@ var y = j * SPACING;
 var ny = y * 0.006;
 for (var i = 0; i < cols; i++) {
 var x = i * SPACING;
-if (x < 360 && y < 100) continue;
 var dx = (x - cx) / rx, dy = (y - cy) / ry;
 var d2 = dx * dx + dy * dy;
 var edge;
@@ -423,6 +433,15 @@ if (c4 < 1.8) {
 var sc = smooth(Math.min(Math.max((c4 - 1) / 0.8, 0), 1));
 if (sc <= 0 || hash(i * 29 + 3, j * 31 + 7) > sc) continue;
 edge *= 0.35 + 0.65 * sc;
+}
+}
+if (wRect) {
+var wdx = (x - wcx) / wrx, wdy = (y - wcy) / wry;
+var w4 = wdx * wdx * wdx * wdx + wdy * wdy * wdy * wdy;
+if (w4 < 1.8) {
+var sw2 = smooth(Math.min(Math.max((w4 - 1) / 0.8, 0), 1));
+if (sw2 <= 0 || hash(i * 37 + 13, j * 41 + 11) > sw2) continue;
+edge *= 0.35 + 0.65 * sw2;
 }
 }
 var f = 0, ring = 0;
