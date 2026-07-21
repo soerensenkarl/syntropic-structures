@@ -209,7 +209,7 @@ var consentEl = document.querySelector(".signup .consent");
 var dpr = Math.min(window.devicePixelRatio || 1, 2);
 var W, H, cols, rows, fields, rings;
 var SPACING = 9;
-var SHAPES = 4;
+var SHAPES = 19;
 
 function resize() {
 W = window.innerWidth;
@@ -253,13 +253,18 @@ the viewport. Per grid dot we store how strongly it sits on structure
 (fields) and a blurred ring just outside it (rings) used to thin the
 surrounding fog, as if cloud matter gets drawn into the shape. */
 
-var SHAPE_SRC = ["structure-1.png", "structure-2.png", "structure-3.png", "structure-4.png"];
-var shapeImgs = [null, null, null, null];
+var shapeImgs = [];
+var buildQueued = false;
+function queueBuild() {
+if (buildQueued) return;
+buildQueued = true;
+setTimeout(function () { buildQueued = false; buildFields(); }, 60);
+}
 for (var si = 0; si < SHAPES; si++) {
 var im = new Image();
-im.onload = buildFields;
-im.src = SHAPE_SRC[si];
-shapeImgs[si] = im;
+im.onload = queueBuild;
+im.src = "structure-" + (si + 1) + ".png";
+shapeImgs.push(im);
 }
 
 function sampleImageField(im, F) {
@@ -324,12 +329,11 @@ var ink = [28, 27, 24];
 var timber = [96, 82, 56];
 var CYCLE = 15000;
 
-/* #truss in the URL pins presence for tuning; #truss0 (gridshell) /
-#truss1 (tower) / #truss2 (girders) / #truss3 (fins) also pins a
-specific shape. Returns null (no pin), -1 (pin, cycling shapes) or a
-shape index. */
+/* #truss in the URL pins presence for tuning; #trussN pins shape N,
+zero-based in file order (#truss0 = structure-1.png, etc). Returns
+null (no pin), -1 (pin, cycling shapes) or a shape index. */
 function debugPin() {
-var m = /^#truss(\d)?$/.exec(location.hash);
+var m = /^#truss(\d+)?$/.exec(location.hash);
 if (!m) return null;
 return m[1] ? +m[1] % SHAPES : -1;
 }
