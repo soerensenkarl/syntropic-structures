@@ -377,7 +377,6 @@ var ny = y * 0.006;
 for (var i = 0; i < cols; i++) {
 var x = i * SPACING;
 if (x < 360 && y < 100) continue;
-if (y > H - 150 && Math.abs(x - cx) < footHalf) continue;
 var dx = (x - cx) / rx, dy = (y - cy) / ry;
 var d2 = dx * dx + dy * dy;
 var edge;
@@ -393,6 +392,16 @@ dissolves into scattered live dots instead of a clean ellipse cut. */
 var sv = smooth(Math.min(Math.max((d2 - 0.35) / 0.9, 0), 1));
 if (sv <= 0 || hash(i * 13 + 7, j * 17 + 3) > sv) continue;
 edge = 0.35 + 0.65 * sv;
+}
+/* The footer gets the same live edge: an elliptical fade probability
+centered on its text instead of the old hard rectangle. */
+var fdx = (x - cx) / (footHalf * 1.05);
+var fdy = (y - (H - 65)) / 130;
+var f2 = fdx * fdx + fdy * fdy;
+if (f2 < 1.25) {
+var sf = smooth(Math.min(Math.max((f2 - 0.35) / 0.9, 0), 1));
+if (sf <= 0 || hash(i * 19 + 11, j * 23 + 5) > sf) continue;
+edge *= 0.35 + 0.65 * sf;
 }
 var f = 0, ring = 0;
 if (p > 0) {
