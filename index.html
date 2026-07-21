@@ -357,14 +357,14 @@ return Math.pow(s, 2.6);
 function draw(tms) {
 var t = tms * 0.000045;
 ctx.clearRect(0, 0, W, H);
-/* Mobile: the desktop mask radii would swallow a phone viewport, so use
-a snug ellipse around the text column, a gentler edge fade, and fainter
-dots overall — a quiet backdrop gathered close around the title. */
+/* Mobile: instead of the desktop's hard ellipse cutoff, the field thins
+to a near-invisible veil across the text and reaches zero only in a
+small core right behind the title, with fainter dots overall — a quiet
+backdrop gathered close around the title. */
 var mobile = W < 640;
 var cx = W * 0.5, cy = H * 0.46;
-var rx = mobile ? W * 0.46 : Math.max(W * 0.30, 320);
-var ry = mobile ? H * 0.33 : Math.max(H * 0.34, 260);
-var edgeK = mobile ? 1.5 : 2.2;
+var rx = mobile ? W * 0.40 : Math.max(W * 0.30, 320);
+var ry = mobile ? H * 0.28 : Math.max(H * 0.34, 260);
 var fade = mobile ? 0.55 : 1;
 var footHalf = mobile ? Math.min(320, W * 0.38) : 320;
 var dbg = debugPin();
@@ -380,7 +380,20 @@ if (x < 360 && y < 100) continue;
 if (y > H - 150 && Math.abs(x - cx) < footHalf) continue;
 var dx = (x - cx) / rx, dy = (y - cy) / ry;
 var d2 = dx * dx + dy * dy;
-if (d2 < 1) continue;
+var edge;
+if (mobile) {
+if (d2 < 0.12) continue;
+var inner = smooth(Math.min((d2 - 0.12) / 0.5, 1)) * 0.22;
+var outer = smooth(Math.min(Math.max((d2 - 1) * 1.5, 0), 1)) * 0.78;
+edge = inner + outer;
+} else {
+/* Probability-space mask: each dot draws a stable random against a
+fade probability that reaches 100% toward the title, so the rim
+dissolves into scattered live dots instead of a clean ellipse cut. */
+var sv = smooth(Math.min(Math.max((d2 - 0.35) / 0.9, 0), 1));
+if (sv <= 0 || hash(i * 13 + 7, j * 17 + 3) > sv) continue;
+edge = 0.35 + 0.65 * sv;
+}
 var f = 0, ring = 0;
 if (p > 0) {
 var idx = j * cols + i;
@@ -394,7 +407,7 @@ it, so passing clouds condense into the shape and, on release,
 continue drifting as themselves. */
 var vEff = v + p * (f * 0.4 - ring * 0.1);
 if (vEff < 0.52) continue;
-var strength = Math.min((vEff - 0.52) * 7, 1) * Math.min((d2 - 1) * edgeK, 1);
+var strength = Math.min((vEff - 0.52) * 7, 1) * edge;
 if (strength <= 0.02) continue;
 var jit = hash(i * 7 + 3, j * 11 + 5);
 if (jit > 0.35 + strength * 0.6) continue;
@@ -403,7 +416,9 @@ var size = 1 + strength * 2.2 * (0.6 + jit * 0.8) + w * 0.4;
 var cr = Math.round(ink[0] + (timber[0] - ink[0]) * w);
 var cg = Math.round(ink[1] + (timber[1] - ink[1]) * w);
 var cb = Math.round(ink[2] + (timber[2] - ink[2]) * w);
-ctx.fillStyle = "rgba(" + cr + "," + cg + "," + cb + "," + ((0.25 + strength * 0.65) * fade).toFixed(3) + ")";
+var alpha = (0.25 + strength * 0.65) * fade;
+if (mobile) alpha *= 0.35 + 0.65 * Math.min(edge / 0.78, 1);
+ctx.fillStyle = "rgba(" + cr + "," + cg + "," + cb + "," + alpha.toFixed(3) + ")";
 ctx.fillRect(x, y, size, size);
 }
 }
