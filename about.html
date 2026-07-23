@@ -52,6 +52,38 @@ color: var(--accent);
 }
 hr { border: none; border-top: 1px solid var(--rule); margin: 2rem 0; }
 p { margin: 0.6rem 0; }
+.facts { margin: 0; }
+.facts > div {
+display: grid;
+grid-template-columns: 8.5rem 1fr;
+column-gap: 1.5rem;
+align-items: baseline;
+margin: 2.1rem 0;
+}
+.facts dt {
+grid-column: 1;
+font-family: "IBM Plex Mono", monospace;
+font-size: 0.65rem;
+letter-spacing: 0.28em;
+text-transform: uppercase;
+color: var(--accent);
+}
+.facts dd {
+grid-column: 2;
+margin: 0;
+font-size: 1.1rem;
+line-height: 1.6;
+}
+.facts dd.sub {
+color: var(--muted);
+font-size: 0.95rem;
+margin-top: 0.2rem;
+}
+@media (max-width: 520px) {
+.facts > div { grid-template-columns: 1fr; }
+.facts dt { grid-column: 1; margin-bottom: 0.5rem; }
+.facts dd { grid-column: 1; }
+}
 a { color: var(--accent); }
 .topnav {
 position: fixed;
@@ -78,9 +110,19 @@ text-transform: uppercase;
 <span class="label">syntropic structures</span>
 <h1>About</h1>
 <hr>
-<p>A company founded by Karl-Johan S&oslash;rensen.</p>
-<p>Cofounder of SAGA Space Architects.</p>
-<p>MIT dual degree: SMArchS Design &amp; Computation + SM Civil and Environmental Engineering.</p>
+<dl class="facts">
+<div>
+<dt>Founder</dt>
+<dd>Karl-Johan S&oslash;rensen</dd>
+<dd class="sub">Cofounder, SAGA Space Architects</dd>
+</div>
+<div>
+<dt>Education</dt>
+<dd>MIT dual degree</dd>
+<dd class="sub">SMArchS Design &amp; Computation</dd>
+<dd class="sub">SM Civil and Environmental Engineering</dd>
+</div>
+</dl>
 <hr>
 <p><a href="/">&larr; back</a></p>
 </main>
