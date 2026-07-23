@@ -26,6 +26,7 @@ var canvas = document.getElementById("dots");
 var ctx = canvas.getContext("2d");
 var consentEl = document.querySelector(".signup .consent");
 var navEl = document.querySelector(".topnav");
+var logoEl = document.querySelector(".logo");
 var dpr = Math.min(window.devicePixelRatio || 1, 2);
 var W, H, cols, rows, fields, rings;
 var SPACING = 9;
@@ -203,6 +204,16 @@ ncy = nRect.top + nRect.height * 0.5;
 nrx2 = nRect.width * 0.5 * 1.25 + 8;
 nry2 = nRect.height * 0.5 * 1.6 + 10;
 }
+/* The top-left logo gets the same treatment, so the node render sits
+in its own small pocket of calm air. */
+var lRect = logoEl ? logoEl.getBoundingClientRect() : null;
+var lcx, lcy, lrx2, lry2;
+if (lRect) {
+lcx = lRect.left + lRect.width * 0.5;
+lcy = lRect.top + lRect.height * 0.5;
+lrx2 = lRect.width * 0.5 * 1.35 + 10;
+lry2 = lRect.height * 0.5 * 1.35 + 10;
+}
 var dbg = debugPin();
 var p = presence(tms, dbg);
 var shape = (dbg !== null && dbg >= 0) ? dbg : Math.floor(tms / CYCLE) % SHAPES;
@@ -254,6 +265,15 @@ if (n4 < 1.8) {
 var sn = smooth(Math.min(Math.max((n4 - 1) / 0.8, 0), 1));
 if (sn <= 0 || hash(i * 37 + 13, j * 41 + 9) > sn) continue;
 edge *= 0.35 + 0.65 * sn;
+}
+}
+if (lRect) {
+var ldx = (x - lcx) / lrx2, ldy = (y - lcy) / lry2;
+var l4 = ldx * ldx * ldx * ldx + ldy * ldy * ldy * ldy;
+if (l4 < 1.8) {
+var sl = smooth(Math.min(Math.max((l4 - 1) / 0.8, 0), 1));
+if (sl <= 0 || hash(i * 43 + 17, j * 47 + 11) > sl) continue;
+edge *= 0.35 + 0.65 * sl;
 }
 }
 var f = 0, ring = 0;
