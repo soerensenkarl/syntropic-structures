@@ -363,9 +363,9 @@ if (!m) return null;
 return m[1] ? +m[1] % SHAPES : -1;
 }
 
-/* 0..1 presence of the structure: one continuous sine bump per cycle —
-no plateau, no ramp corners — so condensing and releasing move at the
-same unhurried pace as the cloud drift. */
+/* 0..1 presence of the structure: one continuous sine bump per cycle,
+with no plateau and no ramp corners, so condensing and releasing move
+at the same unhurried pace as the cloud drift. */
 function presence(ms, dbg) {
 if (reduced) return 0;
 if (dbg !== null) return 1;
@@ -378,7 +378,7 @@ var t = tms * 0.000045;
 ctx.clearRect(0, 0, W, H);
 /* Mobile: instead of the desktop's hard ellipse cutoff, the field thins
 to a near-invisible veil across the text and reaches zero only in a
-small core right behind the title, with fainter dots overall — a quiet
+small core right behind the title, with fainter dots overall: a quiet
 backdrop gathered close around the title. */
 var mobile = W < 640;
 var cx = W * 0.5, cy = H * 0.46;
